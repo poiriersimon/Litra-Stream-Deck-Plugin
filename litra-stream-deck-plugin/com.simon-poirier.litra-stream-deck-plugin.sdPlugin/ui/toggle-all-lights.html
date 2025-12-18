@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toggle All Lights</title>
+    <script src="sdpi-components.js"></script>
+</head>
+<body>
+    <sdpi-item label="Brightness">
+        <sdpi-range setting="brightness" min="1" max="100" value="100" suffix="%"></sdpi-range>
+    </sdpi-item>
+
+    <sdpi-item label="Temperature">
+        <sdpi-range setting="temperature" min="2700" max="6500" step="100" value="4500" suffix="K"></sdpi-range>
+    </sdpi-item>
+
+    <sdpi-item label="Apply on Toggle On">
+        <sdpi-checkbox setting="applyOnToggle" value="true"></sdpi-checkbox>
+    </sdpi-item>
+
+    <script>
+        const { streamDeckClient } = SDPIComponents;
+        
+        streamDeckClient.onConnected(() => {
+            streamDeckClient.getSettings().then(settings => {
+                // Settings are automatically populated via the 'setting' attribute
+                console.log('Connected with settings:', settings);
+            });
+        });
+    </script>
+</body>
+</html>

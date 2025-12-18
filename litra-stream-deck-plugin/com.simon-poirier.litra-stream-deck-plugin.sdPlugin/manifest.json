@@ -1,0 +1,133 @@
+{
+	"Name": "Litra Stream Deck Plugin",
+	"Version": "0.1.0.0",
+	"Author": "Simon Poirier",
+	"Actions": [
+		{
+			"Name": "Control Litra",
+			"UUID": "com.simon-poirier.litra-stream-deck-plugin.control-litra",
+			"Icon": "imgs/actions/Litra-Off",
+			"Tooltip": "Control any Litra light (Beam or Glow) - key background shows on/off state.",
+			"PropertyInspectorPath": "ui/control-litra.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/Litra-Off-key",
+					"TitleAlignment": "top",
+					"Name": "Off"
+				},
+				{
+					"Image": "imgs/actions/Litra-On-key",
+					"TitleAlignment": "top",
+					"Name": "On"
+				}
+			]
+		},
+		{
+			"Name": "Toggle All Lights",
+			"UUID": "com.simon-poirier.litra-stream-deck-plugin.toggle-all",
+			"Icon": "imgs/actions/Litra-Off",
+			"Tooltip": "Turn all Litra lights on or off.",
+			"PropertyInspectorPath": "ui/toggle-all-lights.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/Litra-Off-key",
+					"TitleAlignment": "top"
+				}
+			]
+		},
+		{
+			"Name": "Increase Brightness",
+			"UUID": "com.simon-poirier.litra-stream-deck-plugin.increase-brightness",
+			"Icon": "imgs/actions/Litra-Off",
+			"Tooltip": "Increase brightness of Litra lights.",
+			"PropertyInspectorPath": "ui/adjust-brightness.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/Litra-Off-key",
+					"TitleAlignment": "top"
+				}
+			]
+		},
+		{
+			"Name": "Decrease Brightness",
+			"UUID": "com.simon-poirier.litra-stream-deck-plugin.decrease-brightness",
+			"Icon": "imgs/actions/Litra-Off",
+			"Tooltip": "Decrease brightness of Litra lights.",
+			"PropertyInspectorPath": "ui/adjust-brightness.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/Litra-Off-key",
+					"TitleAlignment": "top"
+				}
+			]
+		},
+		{
+			"Name": "Increase Temperature",
+			"UUID": "com.simon-poirier.litra-stream-deck-plugin.increase-temperature",
+			"Icon": "imgs/actions/Litra-temp-up",
+			"Tooltip": "Increase color temperature of Litra lights (warmer).",
+			"PropertyInspectorPath": "ui/adjust-temperature.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/Litra-temp-up-key",
+					"TitleAlignment": "top"
+				}
+			]
+		},
+		{
+			"Name": "Decrease Temperature",
+			"UUID": "com.simon-poirier.litra-stream-deck-plugin.decrease-temperature",
+			"Icon": "imgs/actions/Litra-temp-down",
+			"Tooltip": "Decrease color temperature of Litra lights (cooler).",
+			"PropertyInspectorPath": "ui/adjust-temperature.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/Litra-temp-down-key",
+					"TitleAlignment": "top"
+				}
+			]
+		}
+	],
+	"Category": "Litra Stream Deck Plugin",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "A Stream Deck Plugin to control Litra Lights",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "6.9"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		},
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "20",
+		"Debug": "enabled"
+	},
+	"UUID": "com.simon-poirier.litra-stream-deck-plugin"
+}

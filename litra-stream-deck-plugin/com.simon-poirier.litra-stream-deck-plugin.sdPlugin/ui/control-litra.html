@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Litra</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            margin: 0; 
+            padding: 8px 12px; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+            font-size: 9pt;
+            color: #d8d8d8;
+            background: transparent;
+        }
+        .sdpi-item { 
+            margin: 0 0 12px 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .sdpi-item-label { 
+            display: block; 
+            margin-bottom: 4px;
+            font-size: 9pt;
+            font-weight: 500;
+        }
+        .sdpi-item-value { 
+            display: inline-block;
+            min-width: 50px;
+            text-align: right;
+        }
+        select { 
+            width: 100%; 
+            padding: 4px 6px;
+            background: #3d3d3d;
+            border: 1px solid #2d2d2d;
+            color: #d8d8d8;
+            border-radius: 3px;
+            font-size: 9pt;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin: 4px 0;
+        }
+        input[type="checkbox"] {
+            margin-right: 6px;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #5a9fd4;
+        }
+        label:has(input[type="checkbox"]) {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="sdpi-item">
+        <label class="sdpi-item-label" for="devicePath">Device</label>
+        <select id="devicePath" setting="devicePath">
+            <option value="all">Loading devices...</option>
+        </select>
+    </div>
+
+    <div class="sdpi-item">
+        <label class="sdpi-item-label" for="brightness">Brightness <span class="sdpi-item-value" id="brightnessValue">100</span>%</label>
+        <input type="range" id="brightness" setting="brightness" min="1" max="100" value="100">
+    </div>
+
+    <div class="sdpi-item">
+        <label class="sdpi-item-label" for="temperature">Temperature <span class="sdpi-item-value" id="temperatureValue">4500</span>K</label>
+        <input type="range" id="temperature" setting="temperature" min="2700" max="6500" step="100" value="4500">
+    </div>
+
+    <div class="sdpi-item">
+        <label>
+            <input type="checkbox" id="applyOnToggle" setting="applyOnToggle" checked>
+            Apply on Toggle On
+        </label>
+    </div>
+
+    <script>
+        let savedSettings = {};
+        let allDevices = [];
+        let devicesReceived = 0;
+
+        // Override connection to handle everything in one WebSocket
+        window.connectElgatoStreamDeckSocket = function(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+            const actionData = JSON.parse(inActionInfo);
+            savedSettings = actionData.payload?.settings || {};
+            
+            // Load existing settings into form
+            if (savedSettings.brightness !== undefined) {
+                const brightnessEl = document.getElementById('brightness');
+                brightnessEl.value = savedSettings.brightness;
+                document.getElementById('brightnessValue').textContent = savedSettings.brightness;
+            }
+            if (savedSettings.temperature !== undefined) {
+                const tempEl = document.getElementById('temperature');
+                tempEl.value = savedSettings.temperature;
+                document.getElementById('temperatureValue').textContent = savedSettings.temperature;
+            }
+            if (savedSettings.applyOnToggle !== undefined) {
+                document.getElementById('applyOnToggle').checked = savedSettings.applyOnToggle;
+            }
+            
+            const ws = new WebSocket('ws://127.0.0.1:' + inPort);
+            
+            ws.onopen = function() {
+                ws.send(JSON.stringify({
+                    event: inRegisterEvent,
+                    uuid: inUUID
+                }));
+                
+                // Request both Beam and Glow device lists
+                ws.send(JSON.stringify({
+                    event: 'sendToPlugin',
+                    context: inUUID,
+                    action: actionData.action,
+                    payload: {
+                        event: 'getDevices',
+                        deviceType: 'Beam'
+                    }
+                }));
+                ws.send(JSON.stringify({
+                    event: 'sendToPlugin',
+                    context: inUUID,
+                    action: actionData.action,
+                    payload: {
+                        event: 'getDevices',
+                        deviceType: 'Glow'
+                    }
+                }));
+            };
+            
+            ws.onmessage = function(evt) {
+                const jsonObj = JSON.parse(evt.data);
+                
+                // Handle device list response
+                if (jsonObj.event === 'sendToPropertyInspector' && jsonObj.payload?.event === 'deviceList') {
+                    allDevices = allDevices.concat(jsonObj.payload.devices);
+                    devicesReceived++;
+                    
+                    // Wait for both device lists before populating
+                    if (devicesReceived >= 2) {
+                        populateDeviceDropdown();
+                    }
+                }
+                
+                // Handle settings updates
+                if (jsonObj.event === 'didReceiveSettings') {
+                    const newSettings = jsonObj.payload.settings || {};
+                    savedSettings = newSettings;
+                    // Update form with new settings
+                    if (newSettings.devicePath) {
+                        document.getElementById('devicePath').value = newSettings.devicePath;
+                    }
+                    if (newSettings.brightness !== undefined) {
+                        document.getElementById('brightness').value = newSettings.brightness;
+                        document.getElementById('brightnessValue').textContent = newSettings.brightness;
+                    }
+                    if (newSettings.temperature !== undefined) {
+                        document.getElementById('temperature').value = newSettings.temperature;
+                        document.getElementById('temperatureValue').textContent = newSettings.temperature;
+                    }
+                    if (newSettings.applyOnToggle !== undefined) {
+                        document.getElementById('applyOnToggle').checked = newSettings.applyOnToggle;
+                    }
+                }
+            };
+            
+            // Add input listeners for range displays
+            document.getElementById('brightness').addEventListener('input', (e) => {
+                document.getElementById('brightnessValue').textContent = e.target.value;
+            });
+            document.getElementById('temperature').addEventListener('input', (e) => {
+                document.getElementById('temperatureValue').textContent = e.target.value;
+            });
+            
+            // Add change listeners for all elements with setting attribute
+            document.querySelectorAll('[setting]').forEach(element => {
+                element.addEventListener('change', function() {
+                    const settingName = this.getAttribute('setting');
+                    let value = this.value;
+                    
+                    // Handle checkboxes
+                    if (this.type === 'checkbox') {
+                        value = this.checked;
+                    } else if (this.type === 'number') {
+                        value = parseInt(this.value, 10);
+                    } else if (this.type === 'range') {
+                        value = parseInt(this.value, 10);
+                    }
+                    
+                    savedSettings[settingName] = value;
+                    
+                    // If device selection changed, also save the device name
+                    if (settingName === 'devicePath' && this.id === 'devicePath') {
+                        const selectedOption = this.options[this.selectedIndex];
+                        savedSettings.deviceName = selectedOption.textContent;
+                    }
+                    
+                    ws.send(JSON.stringify({
+                        event: 'setSettings',
+                        context: inUUID,
+                        payload: savedSettings
+                    }));
+                });
+            });
+        };
+
+        // Populate the device dropdown
+        function populateDeviceDropdown() {
+            const select = document.getElementById('devicePath');
+            if (!select) return;
+            
+            // Clear existing options
+            select.innerHTML = '';
+            
+            // Add "All Lights" option
+            select.innerHTML += '<option value="all">All Lights</option>';
+            
+            if (allDevices.length === 0) {
+                return;
+            }
+            
+            // Add device options
+            allDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.value;
+                option.textContent = device.label || device.text;
+                select.appendChild(option);
+            });
+            
+            // Restore previous selection if it exists
+            if (savedSettings && savedSettings.devicePath) {
+                select.value = savedSettings.devicePath;
+            }
+        }
+    </script>
+</body>
+</html>
