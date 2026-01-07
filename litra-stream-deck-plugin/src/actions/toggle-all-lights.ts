@@ -1,4 +1,4 @@
-import { action, KeyDownEvent, SingletonAction, WillAppearEvent } from "@elgato/streamdeck";
+import { action, KeyDownEvent, SingletonAction, WillAppearEvent, WillDisappearEvent, streamDeck } from "@elgato/streamdeck";
 import { LitraController, LitraDeviceType } from "../litra-controller";
 
 /**
@@ -6,22 +6,119 @@ import { LitraController, LitraDeviceType } from "../litra-controller";
  */
 @action({ UUID: "com.simon-poirier.litra-stream-deck-plugin.toggle-all" })
 export class ToggleAllLights extends SingletonAction<ToggleAllSettings> {
+    private statusPollIntervals: Map<string, NodeJS.Timeout> = new Map();
+
     /**
      * Update the button appearance when it becomes visible
      */
     override async onWillAppear(ev: WillAppearEvent<ToggleAllSettings>): Promise<void> {
+        await this.updateButtonAppearance(ev.action, ev.payload.settings);
+        
+        // Start polling status every minute
+        this.startStatusPolling(ev.action, ev.payload.settings);
+    }
+
+    /**
+     * Clean up when button disappears
+     */
+    override async onWillDisappear(ev: WillDisappearEvent<ToggleAllSettings>): Promise<void> {
+        this.stopStatusPolling(ev.action.id);
+    }
+
+    /**
+     * Start polling device status every minute
+     */
+    private startStatusPolling(action: any, settings: ToggleAllSettings): void {
+        // Clear any existing interval for this action
+        this.stopStatusPolling(action.id);
+        
+        // Poll every 60 seconds (1 minute)
+        const interval = setInterval(async () => {
+            console.log(`[ToggleAllLights] Polling status for action ${action.id}`);
+            await this.updateButtonAppearance(action, settings);
+        }, 60000);
+        
+        this.statusPollIntervals.set(action.id, interval);
+        console.log(`[ToggleAllLights] Started status polling for action ${action.id}`);
+    }
+
+    /**
+     * Stop polling device status
+     */
+    private stopStatusPolling(actionId: string): void {
+        const interval = this.statusPollIntervals.get(actionId);
+        if (interval) {
+            clearInterval(interval);
+            this.statusPollIntervals.delete(actionId);
+            console.log(`[ToggleAllLights] Stopped status polling for action ${actionId}`);
+        }
+    }
+
+    /**
+     * Update button appearance based on actual device states
+     */
+    private async updateButtonAppearance(action: any, settings: ToggleAllSettings): Promise<void> {
         const devices = [
             ...LitraController.getLitraLights(LitraDeviceType.Beam),
             ...LitraController.getLitraLights(LitraDeviceType.Glow)
         ];
         
         if (devices.length === 0) {
-            await ev.action.setTitle("\n❌");
+            if ('setState' in action) {
+                await action.setState(0);
+            }
+            await action.setTitle("\n❌");
             return;
         }
         
-        const isOn = ev.payload.settings.isOn ?? false;
-        return ev.action.setTitle(isOn ? "\nAll On" : "\nAll Off");
+        // Check ALL devices - only show ON if ALL are on
+        let allOn = true;
+        let onCount = 0;
+        let offCount = 0;
+        let errorCount = 0;
+        
+        streamDeck.logger.info(`[ToggleAllLights] Checking ${devices.length} devices...`);
+        
+        for (const device of devices) {
+            const deviceState = LitraController.isOn(device);
+            streamDeck.logger.info(`[ToggleAllLights] Device ${device.path}: state=${deviceState}`);
+            console.log(`[ToggleAllLights] Device ${device.path}: state=${deviceState}`);
+            
+            if (deviceState === true) {
+                onCount++;
+            } else if (deviceState === false) {
+                offCount++;
+                allOn = false;
+            } else if (deviceState === null) {
+                // If we can't query a device, assume it's off
+                errorCount++;
+                allOn = false;
+            }
+        }
+        
+        streamDeck.logger.info(`[ToggleAllLights] State check: ${devices.length} devices, on=${onCount}, off=${offCount}, errors=${errorCount}, allOn=${allOn}`);
+        console.log(`[ToggleAllLights] All devices state check: ${devices.length} devices, on=${onCount}, off=${offCount}, errors=${errorCount}, all on: ${allOn}`);
+        
+        // Update stored state if it changed
+        let needsSettingsSave = false;
+        if (settings.isOn !== allOn) {
+            console.log(`[ToggleAllLights] Syncing stored state from ${settings.isOn} to actual device state: ${allOn}`);
+            settings.isOn = allOn;
+            needsSettingsSave = true;
+        }
+        
+        // Set the state (0 = off, 1 = on)
+        if ('setState' in action) {
+            await action.setState(allOn ? 1 : 0);
+        }
+        
+        await action.setTitle(allOn ? "\nAll On" : "\nAll Off");
+        
+        // Save settings if state changed
+        if (needsSettingsSave) {
+            await action.setSettings(settings);
+            console.log(`[ToggleAllLights] Settings saved with new state: ${settings.isOn}`);
+        }
     }
 
     /**
@@ -61,7 +158,8 @@ export class ToggleAllLights extends SingletonAction<ToggleAllSettings> {
                     }
                 }
                 
-                await ev.action.setTitle("\nAll On");
+                settings.isOn = true;
+                await this.updateButtonAppearance(ev.action, settings);
                 await ev.action.showOk();
             } else {
                 // Turn all lights off
@@ -74,12 +172,12 @@ export class ToggleAllLights extends SingletonAction<ToggleAllSettings> {
                     return;
                 }
                 
-                await ev.action.setTitle("\nAll Off");
+                settings.isOn = false;
+                await this.updateButtonAppearance(ev.action, settings);
                 await ev.action.showOk();
             }
 
             // Update the state
-            settings.isOn = newState;
             await ev.action.setSettings(settings);
 
             // Log the result

@@ -37,7 +37,13 @@
 			"States": [
 				{
 					"Image": "imgs/actions/Litra-Off-key",
-					"TitleAlignment": "top"
+					"TitleAlignment": "top",
+					"Name": "Off"
+				},
+				{
+					"Image": "imgs/actions/Litra-On-key",
+					"TitleAlignment": "top",
+					"Name": "On"
 				}
 			]
 		},

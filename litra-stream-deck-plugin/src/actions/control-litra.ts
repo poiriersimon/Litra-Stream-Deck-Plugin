@@ -1,4 +1,4 @@
-import { action, KeyDownEvent, SingletonAction, WillAppearEvent } from "@elgato/streamdeck";
+import { action, KeyDownEvent, SingletonAction, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
 import { LitraController, LitraDeviceType } from "../litra-controller";
 
 /**
@@ -6,11 +6,52 @@ import { LitraController, LitraDeviceType } from "../litra-controller";
  */
 @action({ UUID: "com.simon-poirier.litra-stream-deck-plugin.control-litra" })
 export class ControlLitra extends SingletonAction<ControlLitraSettings> {
+    private statusPollIntervals: Map<string, NodeJS.Timeout> = new Map();
+
     /**
      * Update the button appearance when it becomes visible
      */
     override async onWillAppear(ev: WillAppearEvent<ControlLitraSettings>): Promise<void> {
         await this.updateButtonAppearance(ev.action, ev.payload.settings);
+        
+        // Start polling status every minute
+        this.startStatusPolling(ev.action, ev.payload.settings);
+    }
+
+    /**
+     * Clean up when button disappears
+     */
+    override async onWillDisappear(ev: WillDisappearEvent<ControlLitraSettings>): Promise<void> {
+        this.stopStatusPolling(ev.action.id);
+    }
+
+    /**
+     * Start polling device status every minute
+     */
+    private startStatusPolling(action: any, settings: ControlLitraSettings): void {
+        // Clear any existing interval for this action
+        this.stopStatusPolling(action.id);
+        
+        // Poll every 60 seconds (1 minute)
+        const interval = setInterval(async () => {
+            console.log(`[ControlLitra] Polling status for action ${action.id}`);
+            await this.updateButtonAppearance(action, settings);
+        }, 60000);
+        
+        this.statusPollIntervals.set(action.id, interval);
+        console.log(`[ControlLitra] Started status polling for action ${action.id}`);
+    }
+
+    /**
+     * Stop polling device status
+     */
+    private stopStatusPolling(actionId: string): void {
+        const interval = this.statusPollIntervals.get(actionId);
+        if (interval) {
+            clearInterval(interval);
+            this.statusPollIntervals.delete(actionId);
+            console.log(`[ControlLitra] Stopped status polling for action ${actionId}`);
+        }
     }
 
     /**
@@ -21,16 +62,42 @@ export class ControlLitra extends SingletonAction<ControlLitraSettings> {
         
         // Check if any devices are connected
         let hasDevices = false;
+        let actualDeviceState: boolean | null = null;
+        
         if (devicePath === 'all') {
             const allDevices = [
                 ...LitraController.getLitraLights(LitraDeviceType.Beam),
                 ...LitraController.getLitraLights(LitraDeviceType.Glow)
             ];
             hasDevices = allDevices.length > 0;
+            
+            // For "all" mode: check ALL devices and only show ON if ALL are on
+            if (hasDevices && allDevices.length > 0) {
+                let allOn = true;
+                for (const device of allDevices) {
+                    const deviceState = LitraController.isOn(device);
+                    if (deviceState === false) {
+                        allOn = false;
+                        break;
+                    } else if (deviceState === null) {
+                        // If we can't query a device, assume it's off
+                        allOn = false;
+                        break;
+                    }
+                }
+                actualDeviceState = allOn;
+                console.log(`[ControlLitra] All devices state check: ${allDevices.length} devices, all on: ${allOn}`);
+            }
         } else {
             const beamDevice = LitraController.getDeviceByPath(devicePath, LitraDeviceType.Beam);
             const glowDevice = LitraController.getDeviceByPath(devicePath, LitraDeviceType.Glow);
-            hasDevices = !!(beamDevice || glowDevice);
+            const selectedDevice = beamDevice || glowDevice;
+            hasDevices = !!selectedDevice;
+            
+            // Query the actual state of the selected device
+            if (selectedDevice) {
+                actualDeviceState = LitraController.isOn(selectedDevice);
+            }
         }
         
         // If no devices, show red X
@@ -42,7 +109,16 @@ export class ControlLitra extends SingletonAction<ControlLitraSettings> {
             return;
         }
         
-        const isOn = settings.isOn ?? false;
+        // Use actual device state if available, otherwise fall back to stored state
+        const isOn = actualDeviceState !== null ? actualDeviceState : (settings.isOn ?? false);
+        
+        // Update stored state if we successfully queried the device
+        let needsSettingsSave = false;
+        if (actualDeviceState !== null && settings.isOn !== actualDeviceState) {
+            console.log(`[ControlLitra] Syncing stored state from ${settings.isOn} to actual device state: ${actualDeviceState}`);
+            settings.isOn = actualDeviceState;
+            needsSettingsSave = true;
+        }
         
         // Set the state (0 = off, 1 = on) - only works for KeyAction
         if ('setState' in action) {
@@ -58,6 +134,12 @@ export class ControlLitra extends SingletonAction<ControlLitraSettings> {
         } else {
             // Fallback if no device name stored
             await action.setTitle(isOn ? "\nOn" : "\nOff");
+        }
+        
+        // Save settings if state changed
+        if (needsSettingsSave) {
+            await action.setSettings(settings);
+            console.log(`[ControlLitra] Settings saved with new state: ${settings.isOn}`);
         }
     }
 

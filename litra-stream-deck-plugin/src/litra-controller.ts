@@ -107,6 +107,48 @@ export class LitraController {
     }
 
     /**
+     * Query a Litra device and read its response
+     */
+    private static queryDevice(devicePath: string, command: number[]): number[] | null {
+        try {
+            console.log(`[LitraController] Querying device ${devicePath}: [${command.map(c => '0x' + c.toString(16).padStart(2, '0')).join(', ')}]`);
+            const device = new HID.HID(devicePath);
+            device.write(command);
+            
+            // Read the response synchronously (20 bytes)
+            // Note: readSync is available in node-hid for synchronous reads
+            const response = device.readSync();
+            device.close();
+            
+            console.log(`[LitraController] Device response: [${response.map((c: number) => '0x' + c.toString(16).padStart(2, '0')).join(', ')}]`);
+            return response;
+        } catch (error) {
+            console.error(`[LitraController] Failed to query device ${devicePath}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Check if a Litra light is currently on
+     * Queries the device's current power status
+     */
+    static isOn(device: LitraDevice): boolean | null {
+        // Query command to check power status
+        const command = [0x11, 0xff, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        const response = this.queryDevice(device.path, command);
+        
+        if (response && response.length > 4) {
+            // The 5th byte (index 4) contains the power status: 1 = on, 0 = off
+            const isOn = response[4] === 1;
+            console.log(`[LitraController] Device ${device.path} is ${isOn ? 'ON' : 'OFF'}`);
+            return isOn;
+        }
+        
+        console.error(`[LitraController] Failed to query power status for device ${device.path}`);
+        return null;
+    }
+
+    /**
      * Turn on a Litra light
      */
     static turnOn(device: LitraDevice): boolean {
